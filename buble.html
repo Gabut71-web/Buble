@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Buble</title>
+  <style>
+    :root{
+      --size:48px;
+      --gap:6px;
+      --cols:10;
+      --rows:10;
+      --ui-height:120px;
+    }
+    *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    html,body{height:100%}
+    body{
+      margin:0;
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:linear-gradient(180deg,#061220,#081826);
+      color:#e6f2ff;
+      padding:18px;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      touch-action: manipulation;
+    }
+
+    .wrap{
+      width: calc(var(--cols) * var(--size) + (var(--cols)-1)*var(--gap));
+      background: rgba(255,255,255,0.03);
+      padding:14px;
+      border-radius:12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      position:relative;
+      overflow:hidden;
+    }
+
+    .header{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      margin-bottom:12px;
+    }
+    .title{ font-weight:700; font-size:18px; }
+    .sub{ font-size:12px; color:#bcd7ff; margin-top:6px; }
+    .info{ display:flex; gap:8px; align-items:center; }
+    .info > div{
+      background: rgba(255,255,255,0.03);
+      padding:8px 10px;
+      border-radius:8px;
+      min-width:84px;
+      text-align:center;
+      font-size:13px;
+    }
+    .controls{ display:flex; gap:8px; align-items:center; }
+
+    button{
+      background:#0b6bff;
+      color:white;
+      border:0;
+      padding:8px 12px;
+      border-radius:8px;
+      font-weight:600;
+      cursor:pointer;
+      font-size:13px;
+    }
+    button.secondary{ background:transparent; border:1px solid rgba(255,255,255,0.06); }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(var(--cols), var(--size));
+      grid-auto-rows: var(--size);
+      gap: var(--gap);
+      user-select:none;
+      -webkit-user-select:none;
+      touch-action: none;
+      position:relative;
+      z-index:1;
+    }
+
+    .cell{
+      width:var(--size);
+      height:var(--size);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border-radius:10px;
+      box-shadow: inset 0 -6px 14px rgba(0,0,0,0.35);
+      cursor:pointer;
+      transition: transform 160ms cubic-bezier(.16,.8,.36,1), opacity 160ms ease, box-shadow 160ms ease;
+      will-change: transform, opacity;
+      font-weight:700;
+      color:rgba(0,0,0,0.08);
+      user-select:none;
+    }
+    .cell.hidden{ opacity:0; pointer-events:none; transform: scale(0.9); }
+
+    .c0{ background: linear-gradient(180deg,#ff9b9b,#ff4b4b); }
+    .c1{ background: linear-gradient(180deg,#ffd3a6,#ff8f3b); }
+    .c2{ background: linear-gradient(180deg,#fff3a8,#ffd400); }
+    .c3{ background: linear-gradient(180deg,#bfffe1,#2fd1a1); }
+    .c4{ background: linear-gradient(180deg,#d7eeff,#2fa6ff); }
+    .c5{ background: linear-gradient(180deg,#e8d7ff,#9966ff); }
+
+    .hint{ margin-top:10px; display:flex; gap:10px; font-size:13px; justify-content:center; color:#cfe6ff; opacity:0.95; }
+
+    .footer{ margin-top:12px; display:flex; justify-content:space-between; align-items:center; color:#bcd7ff; font-size:13px; }
+
+    /* leaderboard modal */
+    .overlay{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.6);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:40;
+    }
+    .panel{
+      background:#071827;
+      color:#e6f2ff;
+      border-radius:12px;
+      padding:14px;
+      width:320px;
+      max-width:90%;
+      box-shadow:0 12px 40px rgba(0,0,0,0.6);
+    }
+    .panel h3{ margin:0 0 8px 0; font-size:16px; }
+    .list{ max-height:260px; overflow:auto; margin-top:8px; }
+    .row{ display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.03); }
+    .row:last-child{ border-bottom:0; }
+
+    /* particle canvas overlay */
+    canvas.particles{ position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:5; }
+
+    /* responsive */
+    @media(max-width:520px){
+      :root{ --size:36px; --gap:5px; }
+      .wrap{ padding:10px; }
+      .title{ font-size:16px; }
+      .panel{ width:90%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="gameWrap" role="application" aria-label="buble">
+    <div class="header">
+      <div>
+        <div class="title">Buble</div>
+        <div class="sub"></div>
+      </div>
+
+      <div class="info">
+        <div>
+          <div style="font-size:12px; opacity:0.85">Skor</div>
+          <div id="score">0</div>
+        </div>
+        <div>
+          <div style="font-size:12px; opacity:0.85">Terbaik</div>
+          <div id="best">0</div>
+        </div>
+        <div>
+          <div style="font-size:12px; opacity:0.85">Combo</div>
+          <div id="combo">0×</div>
+        </div>
+        <div class="controls">
+          <button id="undoBtn" class="secondary" title="Undo terakhir">Undo</button>
+          <button id="restartBtn" title="Mulai ulang">Restart</button>
+          <button id="lbBtn" class="secondary" title="Leaderboard">Leaderboard</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="grid" class="grid" aria-live="polite"></div>
+
+    <div class="hint">
+      <div></div>
+      <div>Combo reset setelah 3 detik tanpa aksi</div>
+    </div>
+
+    <div class="footer">
+      <div id="remaining">Blok tersisa: 0</div>
+      <div></div>
+    </div>
+
+    <canvas class="particles" id="particles"></canvas>
+    <audio id="soundPop" src="" preload="auto"></audio>
+    <audio id="soundExplode" src="" preload="auto"></audio>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="panel" role="dialog" aria-modal="true" aria-label="Leaderboard">
+      <h3>Leaderboard Lokal</h3>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input id="playerName" placeholder="Nama (maks 12)" maxlength="12" style="flex:1; padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.06); background:transparent; color:#e6f2ff;">
+        <button id="saveScore">Simpan</button>
+      </div>
+      <div class="list" id="leaderList" role="list" aria-label="Daftar skor"></div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+        <button id="closeLb" class="secondary">Tutup</button>
+        <button id="clearLb" class="secondary">Hapus Semua</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ====== Pengaturan dasar ======
+    const COLS = 10;
+    const ROWS = 10;
+    const COLORS = 6;
+    const MIN_REMOVE = 2;
+    const gridEl = document.getElementById('grid');
+    const scoreEl = document.getElementById('score');
+    const bestEl = document.getElementById('best');
+    const remainingEl = document.getElementById('remaining');
+    const comboEl = document.getElementById('combo');
+    const restartBtn = document.getElementById('restartBtn');
+    const undoBtn = document.getElementById('undoBtn');
+    const lbBtn = document.getElementById('lbBtn');
+
+    const overlay = document.getElementById('overlay');
+    const leaderList = document.getElementById('leaderList');
+    const playerName = document.getElementById('playerName');
+    const saveScoreBtn = document.getElementById('saveScore');
+    const closeLb = document.getElementById('closeLb');
+    const clearLb = document.getElementById('clearLb');
+
+    const particlesCanvas = document.getElementById('particles');
+    const ctx = particlesCanvas.getContext('2d');
+
+    // sounds (base64 small click & pop to avoid external files)
+    const soundPop = document.getElementById('soundPop');
+    const soundExplode = document.getElementById('soundExplode');
+    // short beep and pop encoded small wav (fallback). Using data URLs for portability.
+    soundPop.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQgAAAAA//8A";
+    soundExplode.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQgAAAAA//8A";
+
+    let board = [];
+    let score = 0;
+    let best = Number(localStorage.getItem('bb_best') || 0);
+    let history = [];
+    let combo = 0;
+    let comboTimer = null;
+    let particleEmit = [];
+    let lastActionAt = 0;
+
+    bestEl.textContent = best;
+
+    // device pixel ratio for canvas
+    function resizeCanvas(){
+      const rect = particlesCanvas.getBoundingClientRect();
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      particlesCanvas.width = Math.round(rect.width * dpr);
+      particlesCanvas.height = Math.round(rect.height * dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function randColor(){ return Math.floor(Math.random()*COLORS); }
+
+    function createBoard(){
+      board = [];
+      for(let r=0;r<ROWS;r++){
+        const row = [];
+        for(let c=0;c<COLS;c++) row.push(randColor());
+        board.push(row);
+      }
+      score = 0;
+      history = [];
+      combo = 0;
+      render();
+    }
+
+    function render(){
+      gridEl.innerHTML = '';
+      for(let r=0;r<ROWS;r++){
+        for(let c=0;c<COLS;c++){
+          const v = board[r][c];
+          const cell = document.createElement('div');
+          cell.className = 'cell ' + (v===null ? 'hidden' : 'c'+v);
+          cell.dataset.r = r;
+          cell.dataset.c = c;
+          if(v!==null) cell.setAttribute('role','button');
+          gridEl.appendChild(cell);
+        }
+      }
+      scoreEl.textContent = score;
+      bestEl.textContent = best;
+      remainingEl.textContent = 'Blok tersisa: ' + countRemaining();
+      comboEl.textContent = combo + '×';
+      // bind pointer events for mobile + desktop
+      gridEl.querySelectorAll('.cell').forEach(el=>{
+        el.onpointerdown = onCellPointerDown;
+      });
+    }
+
+    function inBounds(r,c){ return r>=0 && r<ROWS && c>=0 && c<COLS; }
+
+    function floodFill(r,c){
+      const target = board[r][c];
+      if(target===null) return [];
+      const stack = [[r,c]];
+      const group = [];
+      const seen = new Set();
+      while(stack.length){
+        const [cr,cc] = stack.pop();
+        if(!inBounds(cr,cc)) continue;
+        if(board[cr][cc] !== target) continue;
+        const key = cr + ',' + cc;
+        if(seen.has(key)) continue;
+        seen.add(key);
+        group.push([cr,cc]);
+        stack.push([cr+1,cc],[cr-1,cc],[cr,cc+1],[cr,cc-1]);
+      }
+      return group;
+    }
+
+    // record history simple snapshot
+    function pushHistory(){
+      const copy = board.map(r=>r.slice());
+      history.push({board:copy, score, combo});
+      if(history.length>10) history.shift();
+      undoBtn.disabled = false;
+    }
+
+    function undo(){
+      if(history.length===0) return;
+      const last = history.pop();
+      board = last.board.map(r=>r.slice());
+      score = last.score;
+      combo = last.combo;
+      undoBtn.disabled = history.length===0;
+      render();
+    }
+
+    function applyGravity(){
+      for(let c=0;c<COLS;c++){
+        let write = ROWS-1;
+        for(let r=ROWS-1;r>=0;r--){
+          if(board[r][c] !== null){
+            if(write !== r){
+              board[write][c] = board[r][c];
+              board[r][c] = null;
+            }
+            write--;
+          }
+        }
+      }
+    }
+
+    function shiftLeft(){
+      let write = 0;
+      for(let c=0;c<COLS;c++){
+        if(columnHasAny(c)){
+          if(write !== c){
+            for(let r=0;r<ROWS;r++){
+              board[r][write] = board[r][c];
+              board[r][c] = null;
+            }
+          }
+          write++;
+        }
+      }
+    }
+
+    function columnHasAny(c){
+      for(let r=0;r<ROWS;r++) if(board[r][c] !== null) return true;
+      return false;
+    }
+
+    function countRemaining(){
+      let cnt=0;
+      for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(board[r][c] !== null) cnt++;
+      return cnt;
+    }
+
+    // scoring with multiplier and combo
+    function calculatePoints(groupSize){
+      // base: (n-1)^2 * 10
+      const base = Math.pow(groupSize - 1, 2) * 10;
+      const multiplier = 1 + (combo - 1) * 0.25; // tiap combo +25%
+      return Math.round(base * multiplier);
+    }
+
+    // pointer handling with small debounce and long-press highlight
+    let pointerDownEl = null;
+    let longPressTimer = null;
+    function onCellPointerDown(e){
+      const el = e.currentTarget;
+      if(!el) return;
+      e.preventDefault();
+      const r = Number(el.dataset.r);
+      const c = Number(el.dataset.c);
+      if(board[r][c]===null) return;
+      pointerDownEl = el;
+      longPressTimer = setTimeout(()=>{
+        // highlight group
+        const g = floodFill(r,c);
+        g.forEach(([rr,cc])=>{
+          const idx = rr*COLS + cc;
+          const cell = gridEl.children[idx];
+          cell.style.transform = 'scale(1.08)';
+          cell.style.boxShadow = '0 12px 30px rgba(0,0,0,0.5)';
+        });
+        setTimeout(()=> {
+          g.forEach(([rr,cc])=>{
+            const idx = rr*COLS + cc;
+            const cell = gridEl.children[idx];
+            cell.style.transform = '';
+            cell.style.boxShadow = '';
+          });
+        }, 600);
+      }, 350);
+
+      const onUp = (ev) => {
+        clearTimeout(longPressTimer);
+        document.removeEventListener('pointerup', onUp);
+        document.removeEventListener('pointercancel', onUp);
+        if(!pointerDownEl) return;
+        // handle click
+        handleCellAction(r,c);
+        pointerDownEl = null;
+      };
+      document.addEventListener('pointerup', onUp);
+      document.addEventListener('pointercancel', onUp);
+    }
+
+    function handleCellAction(r,c){
+      if(board[r][c] === null) return;
+      const group = floodFill(r,c);
+      if(group.length < MIN_REMOVE){
+        // small bounce
+        const idx = r*COLS + c;
+        const cell = gridEl.children[idx];
+        cell.style.transform = 'scale(0.96)';
+        setTimeout(()=> cell.style.transform = '', 140);
+        playSound('pop');
+        return;
+      }
+      pushHistory();
+
+      // update combo
+      const now = Date.now();
+      if(now - lastActionAt <= 3000){
+        combo++;
+      } else {
+        combo = 1;
+      }
+      lastActionAt = now;
+      // schedule combo reset
+      if(comboTimer) clearTimeout(comboTimer);
+      comboTimer = setTimeout(()=> { combo = 0; comboEl.textContent = combo + '×'; }, 3000);
+
+      // calculate points
+      const pts = calculatePoints(group.length);
+      score += pts;
+      if(score > best) { best = score; localStorage.setItem('bb_best', best); }
+
+      // create particles at cell centers
+      group.forEach(([rr,cc]) => {
+        const rect = gridEl.children[rr*COLS + cc].getBoundingClientRect();
+        const parentRect = gridEl.getBoundingClientRect();
+        const x = rect.left + rect.width/2 - parentRect.left;
+        const y = rect.top + rect.height/2 - parentRect.top;
+        emitParticles(x, y, group.length);
+      });
+
+      // remove with animation
+      group.forEach(([rr,cc]) => {
+        board[rr][cc] = null;
+      });
+
+      playSound('explode');
+
+      applyGravity();
+      shiftLeft();
+      render();
+      checkGameOver();
+    }
+
+    // sounds
+    function playSound(name){
+      try{
+        if(name === 'pop'){
+          soundPop.currentTime = 0; soundPop.play();
+        } else {
+          soundExplode.currentTime = 0; soundExplode.play();
+        }
+      } catch(e){}
+    }
+
+    // ===== PARTICLE SYSTEM =====
+    function emitParticles(x,y,scale=4){
+      const count = Math.min(40, Math.floor(scale * 6));
+      for(let i=0;i<count;i++){
+        particleEmit.push({
+          x, y,
+          vx: (Math.random()*2-1) * 3 * (Math.random()*1.5+0.5),
+          vy: (Math.random()*-2-4) * (Math.random()*1.2+0.8),
+          life: Math.random()*800 + 400,
+          t: 0,
+          size: Math.random()*6 + 3,
+          hue: Math.floor(Math.random()*360),
+          opacity: 1
+        });
+      }
+    }
+
+    function updateParticles(dt){
+      for(let i=particleEmit.length-1;i>=0;i--){
+        const p = particleEmit[i];
+        p.t += dt;
+        p.x += p.vx * dt/16;
+        p.y += (p.vy + 0.6 * (p.t/16)) * dt/16; // gravity effect
+        p.opacity = Math.max(0, 1 - p.t / p.life);
+        if(p.t >= p.life) particleEmit.splice(i,1);
+      }
+    }
+
+    function renderParticles(){
+      ctx.clearRect(0,0,particlesCanvas.width,particlesCanvas.height);
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      // draw
+      ctx.save();
+      for(const p of particleEmit){
+        ctx.globalAlpha = p.opacity;
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size*2);
+        // choose color by hue or random warm
+        const hue = Math.floor((p.hue + (p.t/10)) % 360);
+        g.addColorStop(0, `hsla(${hue},85%,65%,1)`);
+        g.addColorStop(1, `hsla(${hue},85%,55%,0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    let lastFrame = performance.now();
+    function frame(now){
+      const dt = now - lastFrame;
+      lastFrame = now;
+      updateParticles(dt);
+      renderParticles();
+      requestAnimationFrame(frame);
+    }
+
+    // ===== GAMEOVER =====
+    function checkGameOver(){
+      for(let r=0;r<ROWS;r++){
+        for(let c=0;c<COLS;c++){
+          if(board[r][c]===null) continue;
+          const g = floodFill(r,c);
+          if(g.length >= MIN_REMOVE) return false;
+        }
+      }
+      // game over
+      setTimeout(()=> {
+        const msg = 'Game selesai. Skor: ' + score;
+        alert(msg);
+        // suggest save to leaderboard
+        overlay.style.display = 'flex';
+        playerName.focus();
+      }, 120);
+      return true;
+    }
+
+    // ===== Leaderboard local (localStorage) =====
+    const KEY_LEAD = 'bb_leaderboard_v1';
+    function getLeaders(){
+      try{
+        const raw = localStorage.getItem(KEY_LEAD);
+        if(!raw) return [];
+        return JSON.parse(raw);
+      } catch(e){ return []; }
+    }
+    function saveLeaders(list){
+      localStorage.setItem(KEY_LEAD, JSON.stringify(list));
+    }
+    function renderLeaders(){
+      const list = getLeaders();
+      leaderList.innerHTML = '';
+      if(list.length === 0){
+        leaderList.innerHTML = '<div style="padding:8px; opacity:0.85">Belum ada skor.</div>';
+        return;
+      }
+      list.slice(0,30).forEach((item, idx) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.innerHTML = `<div>${idx+1}. ${escapeHtml(item.name)}</div><div>${item.score}</div>`;
+        leaderList.appendChild(row);
+      });
+    }
+    function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[m]); }
+
+    saveScoreBtn.addEventListener('click', ()=>{
+      const name = (playerName.value || 'Anon').trim().slice(0,12);
+      const list = getLeaders();
+      list.push({name, score, date: Date.now()});
+      list.sort((a,b)=> b.score - a.score);
+      saveLeaders(list);
+      renderLeaders();
+    });
+    lbBtn.addEventListener('click', ()=>{
+      overlay.style.display = 'flex';
+      renderLeaders();
+      setTimeout(()=> playerName.focus(), 120);
+    });
+    closeLb.addEventListener('click', ()=> overlay.style.display = 'none');
+    clearLb.addEventListener('click', ()=>{
+      if(confirm('Hapus semua leaderboard?')) { localStorage.removeItem(KEY_LEAD); renderLeaders(); }
+    });
+
+    // ===== small helpers =====
+    restartBtn.addEventListener('click', ()=> {
+      if(confirm('Mulai ulang permainan?')) createBoard();
+    });
+    undoBtn.addEventListener('click', undo);
+
+    // keyboard shortcuts
+    window.addEventListener('keydown', (e)=>{
+      if(e.key === 'z') undo();
+      if(e.key === 'r') { if(confirm('Mulai ulang permainan?')) createBoard(); }
+      if(e.key === 'l') { lbBtn.click(); }
+    });
+
+    // init
+    resizeCanvas();
+    createBoard();
+    requestAnimationFrame(frame);
+
+    // make sure particles canvas covers area when resizing wrap
+    const obs = new ResizeObserver(()=> resizeCanvas());
+    obs.observe(document.getElementById('gameWrap'));
+
+    // accessibility: allow taps anywhere to close overlay
+    overlay.addEventListener('pointerdown', (e)=>{
+      if(e.target === overlay) overlay.style.display = 'none';
+    });
+
+    // initial sound warm-up for mobile autoplay restrictions
+    function unlockAudio(){
+      try{
+        soundPop.play().catch(()=>{});
+        soundExplode.play().catch(()=>{});
+      } catch(e){}
+      document.removeEventListener('pointerdown', unlockAudio);
+    }
+    document.addEventListener('pointerdown', unlockAudio, {passive:true});
+
+    // small optimization: pre-create elements to reduce layout thrash on mobile
+    (function preWet(){
+      // noop for now, placeholder if want to pre-create dom
+    })();
+
+  </script>
+</body>
+</html>
